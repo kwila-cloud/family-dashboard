@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Force non-interactive apt operations
+export DEBIAN_FRONTEND=noninteractive
+
 # Magic Mirror 2 Automated Installation Script
 # Must be run via sudo from a regular user account on Raspberry Pi
 
@@ -13,6 +16,21 @@ Magic Mirror 2 is optimized for the Raspberry Pi display and hardware.
 This installation script has detected that you are not running on a Raspberry Pi.
 For installations on other systems, please follow the official Magic Mirror
 installation guide: https://docs.magicmirror.builders/getting-started/installation.html
+EOF
+    exit 1
+fi
+
+# Force interactive use only - exit early if not interactive shell
+if [ ! -t 0 ] || [ -n "${CI:-}" ] || [ -n "${AUTOMATION:-}" ]; then
+    cat >&2 <<'EOF'
+ERROR: This script requires an interactive shell and cannot be run in automated environments.
+Magic Mirror 2 installation requires manual supervision and user input.
+
+For automated installations, consider using a pre-configured system image or
+manual installation following: https://docs.magicmirror.builders/getting-started/installation.html
+
+If you believe this detection is incorrect, ensure you are running this
+script directly from a terminal session and not through automation tools.
 EOF
     exit 1
 fi
@@ -118,7 +136,7 @@ log_success "System packages updated"
 
 # Install required system packages
 log_info "Installing system prerequisites..."
-apt install -y curl git build-essential libasound2-plugins xserver-xorg x11-xserver-utils xinit wget || error_exit "Failed to install system prerequisites"
+apt install -y -q curl git build-essential libasound2-plugins xserver-xorg x11-xserver-utils xinit wget || error_exit "Failed to install system prerequisites"
 log_success "System prerequisites installed"
 
 # Install Node.js LTS
@@ -133,13 +151,13 @@ fi
 
 # Install npm if not present
 if ! command -v npm >/dev/null 2>&1; then
-    apt install -y npm || error_exit "Failed to install npm"
+    apt install -y -q npm || error_exit "Failed to install npm"
     log_success "npm installed"
 fi
 
 # Install emoi icons
 log_info "Installing emoji fonts..."
-apt install -y fonts-noto-color-emoji || log_warning "Failed to install emoji fonts (continuing anyway)"
+apt install -y -q fonts-noto-color-emoji || log_warning "Failed to install emoji fonts (continuing anyway)"
 log_success "Emoji fonts installation completed"
 
 # Install Magic Mirror 2
@@ -153,6 +171,9 @@ if [ -d "$MM_DIR" ]; then
     else
         log_warning "Continuing with existing installation"
     fi
+else
+    # Ensure PM2 PATH is set for this user session
+    echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> "$MM_HOME/.bashrc"
 fi
 
 if [ ! -d "$MM_DIR" ]; then
@@ -193,13 +214,15 @@ for module_dir in "$MM_DIR/modules"/*; do
 done
 log_success "Module dependencies installed for $MODULE_COUNT modules"
 
-# Install pm2 globally
+# Install pm2 globally for target user
 log_info "Installing PM2 process manager..."
-if ! command -v pm2 >/dev/null 2>&1; then
-    npm install -g pm2 || error_exit "Failed to install PM2"
-    log_success "PM2 installed"
+if ! sudo -u "$MM_USER" command -v pm2 >/dev/null 2>&1; then
+    sudo -u "$MM_USER" npm install -g pm2 || error_exit "Failed to install PM2"
+    # Ensure PM2 is in PATH for the target user
+    sudo -u "$MM_USER" bash -lc 'export PATH="$HOME/.npm-global/bin:$PATH" && pm2 --version' || error_exit "PM2 not accessible to target user"
+    log_success "PM2 installed for user $MM_USER"
 else
-    log_warning "PM2 already installed: $(pm2 --version)"
+    log_warning "PM2 already installed for user $MM_USER: $(sudo -u "$MM_USER" pm2 --version)"
 fi
 
 # Create PM2 ecosystem configuration
@@ -237,20 +260,19 @@ log_success "PM2 ecosystem configuration created"
 
 # Start Magic Mirror with PM2
 log_info "Starting Magic Mirror with PM2..."
-sudo -u "$MM_USER" pm2 start "$MM_DIR/ecosystem.config.js" || error_exit "Failed to start Magic Mirror with PM2"
-sudo -u "$MM_USER" pm2 save || log_warning "Failed to save PM2 process list"
+sudo -u "$MM_USER" bash -lc "cd '$MM_DIR' && export PATH='$HOME/.npm-global/bin:$PATH' && pm2 start '$MM_DIR/ecosystem.config.js'" || error_exit "Failed to start Magic Mirror with PM2"
+sudo -u "$MM_USER" bash -lc "export PATH='$HOME/.npm-global/bin:$PATH' && pm2 save" || log_warning "Failed to save PM2 process list"
 log_success "Magic Mirror started with PM2"
 
 # Configure PM2 startup
 log_info "Configuring PM2 startup..."
-PM2_STARTUP_CMD=$(sudo -u "$MM_USER" pm2 startup | grep "sudo" || true)
-if [ -n "$PM2_STARTUP_CMD" ]; then
-    log_info "Running PM2 startup command: $PM2_STARTUP_CMD"
-    eval "$PM2_STARTUP_CMD" || log_warning "Failed to configure PM2 startup"
+# Use explicit pm2 startup command to avoid unsafe eval
+PM2_STARTUP_OUTPUT=$(pm2 startup systemd -u "$MM_USER" --hp "$MM_HOME" 2>&1 || true)
+if echo "$PM2_STARTUP_OUTPUT" | grep -q "successfully"; then
+    log_success "PM2 startup configuration completed"
 else
-    log_warning "PM2 startup command not found"
+    log_warning "PM2 startup configuration may have issues: $PM2_STARTUP_OUTPUT"
 fi
-log_success "PM2 startup configuration completed"
 
 # Enable Plymouth bgrt theme
 log_info "Enabling Plymouth bgrt theme..."
