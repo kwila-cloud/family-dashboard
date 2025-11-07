@@ -113,12 +113,12 @@ log_success "Disk space check passed (${AVAILABLE_MB}MB available)"
 
 # Update system packages
 log_info "Updating system packages..."
-sudo apt update -qq || error_exit "Failed to update package lists"
+apt update -qq || error_exit "Failed to update package lists"
 log_success "System packages updated"
 
 # Install required system packages
 log_info "Installing system prerequisites..."
-sudo apt install -y curl git build-essential libasound2-plugins xserver-xorg x11-xserver-utils xinit wget || error_exit "Failed to install system prerequisites"
+apt install -y curl git build-essential libasound2-plugins xserver-xorg x11-xserver-utils xinit wget || error_exit "Failed to install system prerequisites"
 log_success "System prerequisites installed"
 
 # Install Node.js LTS
@@ -127,19 +127,19 @@ if command -v node >/dev/null 2>&1; then
     log_warning "Node.js already installed: $(node --version)"
 else
     curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - || error_exit "Failed to setup NodeSource repository"
-    sudo apt install -y nodejs || error_exit "Failed to install Node.js"
+    apt install -y nodejs || error_exit "Failed to install Node.js"
     log_success "Node.js $(node --version) installed"
 fi
 
 # Install npm if not present
 if ! command -v npm >/dev/null 2>&1; then
-    sudo apt install -y npm || error_exit "Failed to install npm"
+    apt install -y npm || error_exit "Failed to install npm"
     log_success "npm installed"
 fi
 
 # Install emoi icons
 log_info "Installing emoji fonts..."
-sudo apt install -y fonts-noto-color-emoji || log_warning "Failed to install emoji fonts (continuing anyway)"
+apt install -y fonts-noto-color-emoji || log_warning "Failed to install emoji fonts (continuing anyway)"
 log_success "Emoji fonts installation completed"
 
 # Install Magic Mirror 2
@@ -162,22 +162,22 @@ if [ ! -d "$MM_DIR" ]; then
 fi
 
 log_info "Installing Magic Mirror dependencies..."
-sudo -u "$MM_USER" cd "$MM_DIR" && npm install --production || error_exit "Failed to install Magic Mirror dependencies"
+sudo -u "$MM_USER" bash -lc "cd '$MM_DIR' && npm install --production" || error_exit "Failed to install Magic Mirror dependencies"
 log_success "Magic Mirror dependencies installed"
 
 # Copy configuration
 log_info "Copying configuration files..."
-sudo cp "$SOURCE_DIR/config.js" "$MM_DIR/config/config.js" || error_exit "Failed to copy config.js"
-sudo chown "$MM_USER:$MM_USER" "$MM_DIR/config/config.js" || error_exit "Failed to set config.js ownership"
+cp "$SOURCE_DIR/config.js" "$MM_DIR/config/config.js" || error_exit "Failed to copy config.js"
+chown "$MM_USER:$MM_USER" "$MM_DIR/config/config.js" || error_exit "Failed to set config.js ownership"
 log_success "Configuration files copied"
 
 # Copy modules
 log_info "Copying custom modules..."
 if [ -d "$MM_DIR/modules" ]; then
-    sudo rm -rf "$MM_DIR/modules" || error_exit "Failed to remove existing modules directory"
+    rm -rf "$MM_DIR/modules" || error_exit "Failed to remove existing modules directory"
 fi
-sudo cp -r "$SOURCE_DIR/modules" "$MM_DIR/modules" || error_exit "Failed to copy modules directory"
-sudo chown -R "$MM_USER:$MM_USER" "$MM_DIR/modules" || error_exit "Failed to set modules ownership"
+cp -r "$SOURCE_DIR/modules" "$MM_DIR/modules" || error_exit "Failed to copy modules directory"
+chown -R "$MM_USER:$MM_USER" "$MM_DIR/modules" || error_exit "Failed to set modules ownership"
 log_success "Custom modules copied"
 
 # Install module dependencies
@@ -196,7 +196,7 @@ log_success "Module dependencies installed for $MODULE_COUNT modules"
 # Install pm2 globally
 log_info "Installing PM2 process manager..."
 if ! command -v pm2 >/dev/null 2>&1; then
-    sudo npm install -g pm2 || error_exit "Failed to install PM2"
+    npm install -g pm2 || error_exit "Failed to install PM2"
     log_success "PM2 installed"
 else
     log_warning "PM2 already installed: $(pm2 --version)"
