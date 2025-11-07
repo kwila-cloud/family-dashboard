@@ -144,7 +144,18 @@ log_info "Installing Node.js LTS..."
 if command -v node >/dev/null 2>&1; then
     log_warning "Node.js already installed: $(node --version)"
 else
-    curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - || error_exit "Failed to setup NodeSource repository"
+    # Download NodeSource setup script for inspection
+    TEMP_SCRIPT=$(mktemp)
+    log_info "Downloading NodeSource setup script..."
+    curl -fsSL https://deb.nodesource.com/setup_lts.x -o "$TEMP_SCRIPT" || error_exit "Failed to download NodeSource setup script"
+
+    # Execute the downloaded script (already running as root via sudo)
+    log_info "Executing NodeSource setup script..."
+    bash "$TEMP_SCRIPT" || error_exit "Failed to setup NodeSource repository"
+
+    # Clean up temporary file
+    rm -f "$TEMP_SCRIPT"
+
     apt install -y nodejs || error_exit "Failed to install Node.js"
     log_success "Node.js $(node --version) installed"
 fi
