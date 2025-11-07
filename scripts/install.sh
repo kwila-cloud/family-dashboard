@@ -193,8 +193,8 @@ else
 fi
 
 if [ ! -d "$MM_DIR" ]; then
-    log_info "Cloning Magic Mirror repository..."
-    sudo -u "$MM_USER" git clone https://github.com/MichMich/MagicMirror.git "$MM_DIR" || error_exit "Failed to clone Magic Mirror repository"
+    log_info "Shallow cloning Magic Mirror repository..."
+    sudo -u "$MM_USER" git clone --depth 1 https://github.com/MichMich/MagicMirror.git "$MM_DIR" || error_exit "Failed to clone Magic Mirror repository"
     log_success "Magic Mirror repository cloned"
 fi
 
