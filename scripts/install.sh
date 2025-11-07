@@ -276,7 +276,7 @@ module.exports = {
     cwd: '$MM_DIR',
     env: {
       NODE_ENV: 'production',
-      PATH: '/usr/local/bin:/usr/bin:/bin',
+      PATH: '/usr/local/bin:/usr/bin:/bin:$MM_HOME/.npm-global/bin',
       PM2_DISPLAY_NAME: 'MagicMirror'
     },
     restart_delay: 4000,
