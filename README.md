@@ -5,7 +5,7 @@ A home dashboard project that transforms a Raspberry Pi into a family informatio
 ## Quick Start
 
 1. **Review hardware requirements** - Check [hardware.md](hardware.md) for the complete component list
-2. **Set up Raspberry Pi** - Follow the [installation guide](installation.md) to install the software
+2. **Set up Raspberry Pi** - Follow the [installation guide](install.md) to install the software
 
 ## License
 

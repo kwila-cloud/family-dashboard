@@ -247,14 +247,6 @@ else
     log_warning "modules.json not found, skipping module installation"
 fi
 
-# Copy any additional custom modules from source
-if [ -d "$SOURCE_DIR/modules" ]; then
-    log_info "Copying additional custom modules..."
-    cp -r "$SOURCE_DIR/modules"/* "$MM_DIR/modules/" 2>/dev/null || log_warning "No additional custom modules to copy"
-    chown -R "$MM_USER:$MM_USER" "$MM_DIR/modules" || error_exit "Failed to set modules ownership"
-    log_success "Additional custom modules copied"
-fi
-
 # Install pm2 globally for target user
 log_info "Installing PM2 process manager..."
 if ! sudo -u "$MM_USER" command -v pm2 >/dev/null 2>&1; then
