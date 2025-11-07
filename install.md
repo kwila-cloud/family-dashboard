@@ -12,7 +12,13 @@ Run the installation script:
 sudo ./scripts/install.sh /path/to/config/directory
 ```
 
-Configuration files are in the `example/` directory: https://github.com/kwila-cloud/family-dashboard
+Example configuration files are in the `example/` directory - see [here](https://github.com/kwila-cloud/family-dashboard/example).
+
+To try out the example configuration:
+
+```bash
+sudo ./scripts/install.sh example/
+```
 
 The script installs dependencies, MagicMirror, modules from `modules.json`, and configures autostart.
 
