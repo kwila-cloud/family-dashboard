@@ -256,18 +256,37 @@ if ! sudo -u "$MM_USER" command -v pm2 >/dev/null 2>&1; then
     # Configure npm to use user-local directory for global packages
     sudo -u "$MM_USER" npm config set prefix "$MM_HOME/.npm-global" || error_exit "Failed to configure npm prefix"
     
+    # Debug: Show where npm is installing packages
+    log_info "Debug: npm prefix is set to: $(sudo -u "$MM_USER" npm config get prefix)"
+    log_info "Debug: npm global packages location: $(sudo -u "$MM_USER" npm config get prefix)/bin"
+    
     # Install PM2 using the configured prefix
     sudo -u "$MM_USER" npm install -g pm2 || error_exit "Failed to install PM2"
     
+    # Debug: Check where PM2 was actually installed
+    log_info "Debug: Checking PM2 installation location..."
+    sudo -u "$MM_USER" bash -lc "find '$MM_HOME/.npm-global/bin' -name 'pm2' -type f 2>/dev/null || echo 'PM2 not found in npm-global bin'"
+    sudo -u "$MM_USER" bash -lc "ls -la '$MM_HOME/.npm-global/bin' 2>/dev/null || echo 'npm-global bin directory does not exist'"
+    
+    # Debug: Check where node is located
+    log_info "Debug: Node.js location for target user:"
+    sudo -u "$MM_USER" bash -lc "which node || echo 'node not found in PATH'"
+    sudo -u "$MM_USER" bash -lc "command -v node || echo 'node command not found'"
+    
+    # Debug: Check PATH for target user
+    log_info "Debug: Current PATH for target user:"
+    sudo -u "$MM_USER" bash -lc "echo 'PATH: '\$PATH"
+    
     # Ensure PM2 is in PATH for the target user
-    sudo -u "$MM_USER" bash -lc "export PATH='$MM_HOME/.npm-global/bin:\$PATH' && pm2 --version" || error_exit "PM2 not accessible to target user"
+    log_info "Debug: Attempting to run pm2 --version with explicit PATH..."
+    sudo -u "$MM_USER" bash -lc "export PATH='$MM_HOME/.npm-global/bin:\$PATH' && echo 'Debug: PATH is now '\$PATH && which pm2 && pm2 --version" || error_exit "PM2 not accessible to target user"
     
     # Update PATH in current shell for subsequent commands
     export PATH="$MM_HOME/.npm-global/bin:$PATH"
     
     log_success "PM2 installed for user $MM_USER"
 else
-    log_warning "PM2 already installed for user $MM_USER: $(sudo -u "$MM_USER" bash -lc "pm2 --version")"
+    log_warning "PM2 already installed for user $MM_USER: $(sudo -u "$MM_USER" bash -lc "export PATH='$MM_HOME/.npm-global/bin:\$PATH' && pm2 --version")"
 fi
 
 # Create PM2 ecosystem configuration
