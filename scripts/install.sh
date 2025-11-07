@@ -185,7 +185,8 @@ if [ -d "$MM_DIR" ]; then
         sudo -u "$MM_USER" mv "$MM_DIR" "${MM_DIR}.backup.$(date +%Y%m%d_%H%M%S)"
         log_info "Backed up existing installation"
     else
-        log_warning "Continuing with existing installation"
+        log_error "Installation cancelled."
+        exit 1
     fi
 else
     # Ensure PATH includes npm global bin
