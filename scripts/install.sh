@@ -265,21 +265,24 @@ if ! sudo -u "$MM_USER" command -v pm2 >/dev/null 2>&1; then
     
     # Debug: Check where PM2 was actually installed
     log_info "Debug: Checking PM2 installation location..."
-    sudo -u "$MM_USER" bash -lc "find '$MM_HOME/.npm-global/bin' -name 'pm2' -type f 2>/dev/null || echo 'PM2 not found in npm-global bin'"
-    sudo -u "$MM_USER" bash -lc "ls -la '$MM_HOME/.npm-global/bin' 2>/dev/null || echo 'npm-global bin directory does not exist'"
+    sudo -u "$MM_USER" bash -lc "ls -la '$MM_HOME/.npm-global/bin'"
     
     # Debug: Check where node is located
     log_info "Debug: Node.js location for target user:"
-    sudo -u "$MM_USER" bash -lc "which node || echo 'node not found in PATH'"
-    sudo -u "$MM_USER" bash -lc "command -v node || echo 'node command not found'"
+    sudo -u "$MM_USER" bash -lc "command -v node"
+    sudo -u "$MM_USER" bash -lc "ls -la /usr/bin/node"
     
-    # Debug: Check PATH for target user
-    log_info "Debug: Current PATH for target user:"
-    sudo -u "$MM_USER" bash -lc "echo 'PATH: '\$PATH"
+    # Debug: Check the PM2 script itself
+    log_info "Debug: PM2 script content:"
+    sudo -u "$MM_USER" bash -lc "head -5 '$MM_HOME/.npm-global/bin/pm2'"
     
-    # Ensure PM2 is in PATH for the target user
-    log_info "Debug: Attempting to run pm2 --version with explicit PATH..."
-    sudo -u "$MM_USER" bash -lc "export PATH='$MM_HOME/.npm-global/bin:\$PATH' && echo 'Debug: PATH is now '\$PATH && which pm2 && pm2 --version" || error_exit "PM2 not accessible to target user"
+    # Debug: Try to run node directly
+    log_info "Debug: Testing node directly:"
+    sudo -u "$MM_USER" bash -lc "node --version"
+    
+    # Debug: Try to run pm2 with explicit node path
+    log_info "Debug: Attempting to run pm2 with explicit PATH..."
+    sudo -u "$MM_USER" bash -lc "export PATH='$MM_HOME/.npm-global/bin:\$PATH' && pm2 --version" || error_exit "PM2 not accessible to target user"
     
     # Update PATH in current shell for subsequent commands
     export PATH="$MM_HOME/.npm-global/bin:$PATH"
