@@ -2,7 +2,20 @@
 set -euo pipefail
 
 # Magic Mirror 2 Automated Installation Script
-# Must be run via sudo from a regular user account
+# Must be run via sudo from a regular user account on Raspberry Pi
+
+# Check if running on Raspberry Pi
+if [ ! -f /proc/device-tree/model ] || ! grep -qi "raspberry pi" /proc/device-tree/model 2>/dev/null; then
+    cat >&2 <<'EOF'
+ERROR: This script is designed specifically for Raspberry Pi hardware.
+Magic Mirror 2 is optimized for the Raspberry Pi display and hardware.
+
+This installation script has detected that you are not running on a Raspberry Pi.
+For installations on other systems, please follow the official Magic Mirror
+installation guide: https://docs.magicmirror.builders/getting-started/installation.html
+EOF
+    exit 1
+fi
 
 # STRICT: Must be run via sudo so we can determine the target non-root user
 if [ "$(id -u)" -eq 0 ] && [ -z "${SUDO_USER:-}" ]; then
