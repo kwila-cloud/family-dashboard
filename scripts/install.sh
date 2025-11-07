@@ -188,7 +188,7 @@ if [ -d "$MM_DIR" ]; then
         log_warning "Continuing with existing installation"
     fi
 else
-    # Ensure PM2 PATH is set for this user session
+    # Ensure PATH includes npm global bin
     echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> "$MM_HOME/.bashrc"
 fi
 
@@ -252,7 +252,12 @@ fi
 # Install pm2 globally for target user
 log_info "Installing PM2 process manager..."
 if ! sudo -u "$MM_USER" command -v pm2 >/dev/null 2>&1; then
+    # Configure npm to use user-local directory for global packages
+    sudo -u "$MM_USER" npm config set prefix "$MM_HOME/.npm-global" || error_exit "Failed to configure npm prefix"
+    
+    # Install PM2 using the configured prefix
     sudo -u "$MM_USER" npm install -g pm2 || error_exit "Failed to install PM2"
+    
     # Ensure PM2 is in PATH for the target user
     sudo -u "$MM_USER" bash -lc 'export PATH="$HOME/.npm-global/bin:$PATH" && pm2 --version' || error_exit "PM2 not accessible to target user"
     log_success "PM2 installed for user $MM_USER"
