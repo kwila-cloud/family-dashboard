@@ -338,13 +338,13 @@ echo ""
 
 # Display useful commands
 log_info "Useful commands:"
-echo "  Check status:    sudo -u $MM_USER pm2 status"
-echo "  View logs:       sudo -u $MM_USER pm2 logs magicmirror"
-echo "  Restart:         sudo -u $MM_USER pm2 restart magicmirror"
-echo "  Stop:            sudo -u $MM_USER pm2 stop magicmirror"
+echo "  Check status:    pm2 status"
+echo "  View logs:       pm2 logs magicmirror"
+echo "  Restart:         pm2 restart magicmirror"
+echo "  Stop:            pm2 stop magicmirror"
 echo "  View logs file:  tail -f $MM_DIR/logs/pm2-combined.log"
 echo ""
 
 log_success "Magic Mirror 2 installation completed successfully!"
 log_info "The Magic Mirror service should start automatically on system boot."
-log_info "You can check the status with: sudo -u $MM_USER pm2 status"
+log_info "You can check the status with: pm2 status"

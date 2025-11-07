@@ -26,9 +26,9 @@ The script installs dependencies, MagicMirror, modules from `modules.json`, and 
 
 Useful commands:
 
-- Check status: `sudo -u <username> pm2 status`
-- View logs: `sudo -u <username> pm2 logs magicmirror`
-- Restart: `sudo -u <username> pm2 restart magicmirror`
-- Stop: `sudo -u <username> pm2 stop magicmirror`
+- Check status: `pm2 status`
+- View logs: `pm2 logs magicmirror`
+- Restart: `pm2 restart magicmirror`
+- Stop: `pm2 stop magicmirror`
 
 The service automatically starts on boot.
