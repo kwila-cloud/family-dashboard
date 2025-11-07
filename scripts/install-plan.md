@@ -23,6 +23,7 @@ Create a bash installation script that sets up Magic Mirror 2 on a fresh Raspber
 1. Install pm2 globally
 1. Create pm2 ecosystem configuration file to start Magic Mirror at boot
 1. Save pm2 configuration to startup
+1. Enable plymouth bgrt theme: `sudo plymouth-set-default-theme -R bgrt`
 1. Verify installation by checking Magic Mirror starts successfully
 
 ### Error Handling
@@ -53,3 +54,7 @@ Be sure to read all documentation before starting on the implementation.
 - Configuration Guide: https://docs.magicmirror.builders/configuration/introduction.html
 - Autostart Guide: https://docs.magicmirror.builders/configuration/autostart.html
 - Modules Docs: https://docs.magicmirror.builders/modules/introduction.html
+
+## Future
+
+- Disable booting to LXDE, instead use custom X startup script (replace pm2 configuration)
