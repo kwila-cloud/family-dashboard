@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# This script is designed to be ran interactively on a fresh install of Raspberry Pi OS.
+# See install.md for more information.
 set -euo pipefail
 
 # Force non-interactive apt operations
