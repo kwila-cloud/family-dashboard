@@ -259,10 +259,10 @@ if ! sudo -u "$MM_USER" command -v pm2 >/dev/null 2>&1; then
     sudo -u "$MM_USER" npm install -g pm2 || error_exit "Failed to install PM2"
     
     # Ensure PM2 is in PATH for the target user
-    sudo -u "$MM_USER" bash -lc 'export PATH="$HOME/.npm-global/bin:$PATH" && pm2 --version' || error_exit "PM2 not accessible to target user"
+    sudo -u "$MM_USER" bash -lc "source '$MM_HOME/.bashrc' && pm2 --version" || error_exit "PM2 not accessible to target user"
     log_success "PM2 installed for user $MM_USER"
 else
-    log_warning "PM2 already installed for user $MM_USER: $(sudo -u "$MM_USER" pm2 --version)"
+    log_warning "PM2 already installed for user $MM_USER: $(sudo -u "$MM_USER" bash -lc "source '$MM_HOME/.bashrc' && pm2 --version")"
 fi
 
 # Create PM2 ecosystem configuration
@@ -276,7 +276,7 @@ module.exports = {
     cwd: '$MM_DIR',
     env: {
       NODE_ENV: 'production',
-      PATH: '/usr/local/bin:/usr/bin:/bin:$MM_HOME/.npm-global/bin',
+      PATH: '/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin',
       PM2_DISPLAY_NAME: 'MagicMirror'
     },
     restart_delay: 4000,
@@ -300,14 +300,14 @@ log_success "PM2 ecosystem configuration created"
 
 # Start Magic Mirror with PM2
 log_info "Starting Magic Mirror with PM2..."
-sudo -u "$MM_USER" bash -lc "cd '$MM_DIR' && export PATH='$MM_HOME/.npm-global/bin:\$PATH' && pm2 start '$MM_DIR/ecosystem.config.js'" || error_exit "Failed to start Magic Mirror with PM2"
-sudo -u "$MM_USER" bash -lc "export PATH='$MM_HOME/.npm-global/bin:\$PATH' && pm2 save" || log_warning "Failed to save PM2 process list"
+sudo -u "$MM_USER" bash -lc "cd '$MM_DIR' && source '$MM_HOME/.bashrc' && pm2 start '$MM_DIR/ecosystem.config.js'" || error_exit "Failed to start Magic Mirror with PM2"
+sudo -u "$MM_USER" bash -lc "source '$MM_HOME/.bashrc' && pm2 save" || log_warning "Failed to save PM2 process list"
 log_success "Magic Mirror started with PM2"
 
 # Configure PM2 startup
 log_info "Configuring PM2 startup..."
 # Use explicit pm2 startup command to avoid unsafe eval
-PM2_STARTUP_OUTPUT=$(sudo -u "$MM_USER" bash -lc "export PATH='$MM_HOME/.npm-global/bin:\$PATH' && pm2 startup systemd -u '$MM_USER' --hp '$MM_HOME'" 2>&1 || true)
+PM2_STARTUP_OUTPUT=$(sudo -u "$MM_USER" bash -lc "source '$MM_HOME/.bashrc' && pm2 startup systemd -u '$MM_USER' --hp '$MM_HOME'" 2>&1 || true)
 if echo "$PM2_STARTUP_OUTPUT" | grep -q "successfully"; then
     log_success "PM2 startup configuration completed"
 else
@@ -327,11 +327,11 @@ fi
 log_info "Verifying installation..."
 
 # Check if PM2 process is running
-if sudo -u "$MM_USER" bash -lc "export PATH='$MM_HOME/.npm-global/bin:\$PATH' && pm2 list" | grep -q "magicmirror.*online"; then
+if sudo -u "$MM_USER" bash -lc "source '$MM_HOME/.bashrc' && pm2 list" | grep -q "magicmirror.*online"; then
     log_success "Magic Mirror process is running"
 else
     log_error "Magic Mirror process is not running"
-    sudo -u "$MM_USER" bash -lc "export PATH='$MM_HOME/.npm-global/bin:\$PATH' && pm2 logs magicmirror --lines 10"
+    sudo -u "$MM_USER" bash -lc "source '$MM_HOME/.bashrc' && pm2 logs magicmirror --lines 10"
     exit 1
 fi
 
