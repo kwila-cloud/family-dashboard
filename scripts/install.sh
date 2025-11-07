@@ -118,8 +118,8 @@ if [ ! -f "$SOURCE_DIR/config.js" ]; then
     error_exit "config.js not found in source directory: $SOURCE_DIR"
 fi
 
-if [ ! -d "$SOURCE_DIR/modules" ]; then
-    error_exit "modules directory not found in source directory: $SOURCE_DIR"
+if [ ! -f "$SOURCE_DIR/modules.json" ]; then
+    error_exit "modules.json not found in source directory: $SOURCE_DIR"
 fi
 
 log_success "Source directory validation passed"
@@ -139,7 +139,7 @@ log_success "System packages updated"
 
 # Install required system packages
 log_info "Installing system prerequisites..."
-apt install -y -q curl git build-essential libasound2-plugins xserver-xorg x11-xserver-utils xinit wget || error_exit "Failed to install system prerequisites"
+apt install -y -q curl git build-essential libasound2-plugins xserver-xorg x11-xserver-utils xinit wget jq || error_exit "Failed to install system prerequisites"
 log_success "System prerequisites installed"
 
 # Install Node.js LTS
@@ -207,26 +207,53 @@ chown "$MM_USER:$MM_USER" "$MM_DIR/config/config.js" || error_exit "Failed to se
 log_success "Configuration files copied"
 
 # Copy modules
-log_info "Copying custom modules..."
+log_info "Setting up modules directory..."
 if [ -d "$MM_DIR/modules" ]; then
     rm -rf "$MM_DIR/modules" || error_exit "Failed to remove existing modules directory"
 fi
-cp -r "$SOURCE_DIR/modules" "$MM_DIR/modules" || error_exit "Failed to copy modules directory"
+sudo -u "$MM_USER" mkdir -p "$MM_DIR/modules" || error_exit "Failed to create modules directory"
 chown -R "$MM_USER:$MM_USER" "$MM_DIR/modules" || error_exit "Failed to set modules ownership"
-log_success "Custom modules copied"
+log_success "Modules directory created"
 
-# Install module dependencies
-log_info "Installing module dependencies..."
-MODULE_COUNT=0
-for module_dir in "$MM_DIR/modules"/*; do
-    if [ -d "$module_dir" ] && [ -f "$module_dir/package.json" ]; then
-        MODULE_NAME=$(basename "$module_dir")
-        log_info "Installing dependencies for module: $MODULE_NAME"
-        sudo -u "$MM_USER" npm install --prefix "$module_dir" || log_warning "Failed to install dependencies for $MODULE_NAME"
-        MODULE_COUNT=$((MODULE_COUNT + 1))
-    fi
-done
-log_success "Module dependencies installed for $MODULE_COUNT modules"
+# Install modules from modules.json
+if [ -f "$SOURCE_DIR/modules.json" ]; then
+    log_info "Installing modules from modules.json..."
+    MODULE_COUNT=0
+    
+    # Use jq to get module names and URLs
+    mapfile -t module_names < <(jq -r 'keys[]' "$SOURCE_DIR/modules.json")
+    
+    for module_name in "${module_names[@]}"; do
+        if [ -n "$module_name" ]; then
+            log_info "Installing module: $module_name"
+            git_url=$(jq -r ".\"$module_name\"" "$SOURCE_DIR/modules.json")
+            
+            if [ -n "$git_url" ] && [ "$git_url" != "null" ]; then
+                MODULE_DIR="$MM_DIR/modules/$module_name"
+                
+                cd "$MM_DIR/modules" || error_exit "Failed to change to modules directory"
+                sudo -u "$MM_USER" git clone --depth=1 "$git_url" "$module_name" || log_warning "Failed to clone $module_name"
+                
+                if [ -d "$MODULE_DIR" ] && [ -f "$MODULE_DIR/package.json" ]; then
+                    cd "$MODULE_DIR" || error_exit "Failed to change to module directory"
+                    sudo -u "$MM_USER" npm ci --omit=dev || log_warning "Failed to install dependencies for $module_name"
+                    MODULE_COUNT=$((MODULE_COUNT + 1))
+                fi
+            fi
+        fi
+    done
+    log_success "Installed $MODULE_COUNT modules from modules.json"
+else
+    log_warning "modules.json not found, skipping module installation"
+fi
+
+# Copy any additional custom modules from source
+if [ -d "$SOURCE_DIR/modules" ]; then
+    log_info "Copying additional custom modules..."
+    cp -r "$SOURCE_DIR/modules"/* "$MM_DIR/modules/" 2>/dev/null || log_warning "No additional custom modules to copy"
+    chown -R "$MM_USER:$MM_USER" "$MM_DIR/modules" || error_exit "Failed to set modules ownership"
+    log_success "Additional custom modules copied"
+fi
 
 # Install pm2 globally for target user
 log_info "Installing PM2 process manager..."
