@@ -2,6 +2,9 @@
 set -euo pipefail
 
 # Force non-interactive apt operations
+# Note: While this script requires interactive shell input (verified below),
+# apt package installations must run in non-interactive mode to prevent
+# hanging on configuration prompts during automated installation
 export DEBIAN_FRONTEND=noninteractive
 
 # Magic Mirror 2 Automated Installation Script
