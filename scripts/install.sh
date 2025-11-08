@@ -256,44 +256,23 @@ if ! sudo -u "$MM_USER" command -v pm2 >/dev/null 2>&1; then
     # Configure npm to use user-local directory for global packages
     sudo -u "$MM_USER" npm config set prefix "$MM_HOME/.npm-global" || error_exit "Failed to configure npm prefix"
     
-    # Debug: Show where npm is installing packages
-    log_info "Debug: npm prefix is set to: $(sudo -u "$MM_USER" npm config get prefix)"
-    log_info "Debug: npm global packages location: $(sudo -u "$MM_USER" npm config get prefix)/bin"
-    
     # Install PM2 using the configured prefix
     sudo -u "$MM_USER" npm install -g pm2 || error_exit "Failed to install PM2"
     
-    # Debug: Check where PM2 was actually installed
-    log_info "Debug: Checking PM2 installation location..."
-    sudo -u "$MM_USER" bash -lc "ls -la '$MM_HOME/.npm-global/bin'"
-    
-    # Debug: Check where node is located
-    log_info "Debug: Node.js location for target user:"
-    sudo -u "$MM_USER" bash -lc "command -v node"
-    sudo -u "$MM_USER" bash -lc "ls -la /usr/bin/node"
-    
-    # Debug: Check the PM2 script itself
-    log_info "Debug: PM2 script content:"
-    sudo -u "$MM_USER" bash -lc "head -5 '$MM_HOME/.npm-global/bin/pm2'"
-    
-    # Debug: Try to run node directly
-    log_info "Debug: Testing node directly:"
-    sudo -u "$MM_USER" bash -lc "node --version"
-    
-    # Debug: Try to run pm2 with explicit node path
-    log_info "Debug: Attempting to run pm2 with explicit PATH..."
-    sudo -u "$MM_USER" bash -lc "export PATH='$MM_HOME/.npm-global/bin:\$PATH' && pm2 --version" || error_exit "PM2 not accessible to target user"
+    # Test PM2
+    sudo -u "$MM_USER" bash -lc "pm2 --version" || error_exit "PM2 not accessible to target user"
     
     # Update PATH in current shell for subsequent commands
     export PATH="$MM_HOME/.npm-global/bin:$PATH"
     
     log_success "PM2 installed for user $MM_USER"
 else
-    log_warning "PM2 already installed for user $MM_USER: $(sudo -u "$MM_USER" bash -lc "export PATH='$MM_HOME/.npm-global/bin:\$PATH' && pm2 --version")"
+    log_warning "PM2 already installed for user $MM_USER"
 fi
 
 # Create PM2 ecosystem configuration
 log_info "Creating PM2 ecosystem configuration..."
+
 cat > "$MM_DIR/ecosystem.config.js" <<EOF
 module.exports = {
   apps: [{
