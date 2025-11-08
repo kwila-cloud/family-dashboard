@@ -188,7 +188,7 @@ if [ -d "$MM_DIR" ]; then
         log_error "Installation cancelled."
         exit 1
     fi
-else
+fi
 
 if [ ! -d "$MM_DIR" ]; then
     log_info "Shallow cloning Magic Mirror repository..."
