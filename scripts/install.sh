@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# This script is designed to be ran interactively on a fresh install of Raspberry Pi OS.
+# See install.md for more information.
 set -euo pipefail
 
 # Force non-interactive apt operations
@@ -118,8 +120,8 @@ if [ ! -f "$SOURCE_DIR/config.js" ]; then
     error_exit "config.js not found in source directory: $SOURCE_DIR"
 fi
 
-if [ ! -d "$SOURCE_DIR/modules" ]; then
-    error_exit "modules directory not found in source directory: $SOURCE_DIR"
+if [ ! -f "$SOURCE_DIR/modules.json" ]; then
+    error_exit "modules.json not found in source directory: $SOURCE_DIR"
 fi
 
 log_success "Source directory validation passed"
@@ -139,7 +141,7 @@ log_success "System packages updated"
 
 # Install required system packages
 log_info "Installing system prerequisites..."
-apt install -y -q curl git build-essential libasound2-plugins xserver-xorg x11-xserver-utils xinit wget || error_exit "Failed to install system prerequisites"
+apt install -y -q curl git build-essential libasound2-plugins xserver-xorg x11-xserver-utils xinit wget jq || error_exit "Failed to install system prerequisites"
 log_success "System prerequisites installed"
 
 # Install Node.js LTS
@@ -183,16 +185,14 @@ if [ -d "$MM_DIR" ]; then
         sudo -u "$MM_USER" mv "$MM_DIR" "${MM_DIR}.backup.$(date +%Y%m%d_%H%M%S)"
         log_info "Backed up existing installation"
     else
-        log_warning "Continuing with existing installation"
+        log_error "Installation cancelled."
+        exit 1
     fi
-else
-    # Ensure PM2 PATH is set for this user session
-    echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> "$MM_HOME/.bashrc"
 fi
 
 if [ ! -d "$MM_DIR" ]; then
-    log_info "Cloning Magic Mirror repository..."
-    sudo -u "$MM_USER" git clone https://github.com/MichMich/MagicMirror.git "$MM_DIR" || error_exit "Failed to clone Magic Mirror repository"
+    log_info "Shallow cloning Magic Mirror repository..."
+    sudo -u "$MM_USER" git clone --depth 1 https://github.com/MichMich/MagicMirror.git "$MM_DIR" || error_exit "Failed to clone Magic Mirror repository"
     log_success "Magic Mirror repository cloned"
 fi
 
@@ -207,40 +207,77 @@ chown "$MM_USER:$MM_USER" "$MM_DIR/config/config.js" || error_exit "Failed to se
 log_success "Configuration files copied"
 
 # Copy modules
-log_info "Copying custom modules..."
+log_info "Setting up modules directory..."
 if [ -d "$MM_DIR/modules" ]; then
     rm -rf "$MM_DIR/modules" || error_exit "Failed to remove existing modules directory"
 fi
-cp -r "$SOURCE_DIR/modules" "$MM_DIR/modules" || error_exit "Failed to copy modules directory"
+sudo -u "$MM_USER" mkdir -p "$MM_DIR/modules" || error_exit "Failed to create modules directory"
 chown -R "$MM_USER:$MM_USER" "$MM_DIR/modules" || error_exit "Failed to set modules ownership"
-log_success "Custom modules copied"
+log_success "Modules directory created"
 
-# Install module dependencies
-log_info "Installing module dependencies..."
-MODULE_COUNT=0
-for module_dir in "$MM_DIR/modules"/*; do
-    if [ -d "$module_dir" ] && [ -f "$module_dir/package.json" ]; then
-        MODULE_NAME=$(basename "$module_dir")
-        log_info "Installing dependencies for module: $MODULE_NAME"
-        sudo -u "$MM_USER" npm install --prefix "$module_dir" || log_warning "Failed to install dependencies for $MODULE_NAME"
-        MODULE_COUNT=$((MODULE_COUNT + 1))
-    fi
-done
-log_success "Module dependencies installed for $MODULE_COUNT modules"
+# Install modules from modules.json
+if [ -f "$SOURCE_DIR/modules.json" ]; then
+    log_info "Installing modules from modules.json..."
+    MODULE_COUNT=0
+    
+    # Use jq to get module names and URLs
+    mapfile -t module_names < <(jq -r 'keys[]' "$SOURCE_DIR/modules.json")
+    
+    for module_name in "${module_names[@]}"; do
+        if [ -n "$module_name" ]; then
+            log_info "Installing module: $module_name"
+            git_url=$(jq -r ".\"$module_name\"" "$SOURCE_DIR/modules.json")
+            
+            if [ -n "$git_url" ] && [ "$git_url" != "null" ]; then
+                MODULE_DIR="$MM_DIR/modules/$module_name"
+                
+                cd "$MM_DIR/modules" || error_exit "Failed to change to modules directory"
+                sudo -u "$MM_USER" git clone --depth=1 "$git_url" "$module_name" || log_warning "Failed to clone $module_name"
+                
+                if [ -d "$MODULE_DIR" ] && [ -f "$MODULE_DIR/package.json" ]; then
+                    cd "$MODULE_DIR" || error_exit "Failed to change to module directory"
+                    sudo -u "$MM_USER" npm ci --omit=dev || log_warning "Failed to install dependencies for $module_name"
+                    MODULE_COUNT=$((MODULE_COUNT + 1))
+                fi
+            fi
+        fi
+    done
+    log_success "Installed $MODULE_COUNT modules from modules.json"
+else
+    log_warning "modules.json not found, skipping module installation"
+fi
+
+# Helper function to run commands as MM_USER with proper PATH for pm2
+run_as_user() {
+    sudo -u "$MM_USER" bash -c "export PATH='$MM_HOME/.npm-global/bin:\$PATH' && $*"
+}
 
 # Install pm2 globally for target user
 log_info "Installing PM2 process manager..."
-if ! sudo -u "$MM_USER" command -v pm2 >/dev/null 2>&1; then
-    sudo -u "$MM_USER" npm install -g pm2 || error_exit "Failed to install PM2"
-    # Ensure PM2 is in PATH for the target user
-    sudo -u "$MM_USER" bash -lc 'export PATH="$HOME/.npm-global/bin:$PATH" && pm2 --version' || error_exit "PM2 not accessible to target user"
+
+# Configure npm to use user-local directory for global packages FIRST
+sudo -u "$MM_USER" npm config set prefix "$MM_HOME/.npm-global" || error_exit "Failed to configure npm prefix"
+
+# Ensure PATH includes npm global bin in .bashrc (idempotent)
+if ! grep -q ".npm-global/bin" "$MM_HOME/.bashrc"; then
+    echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> "$MM_HOME/.bashrc"
+fi
+
+if ! run_as_user command -v pm2 >/dev/null 2>&1; then
+    # Install PM2 using the configured prefix
+    run_as_user npm install -g pm2 || error_exit "Failed to install PM2"
+    
+    # Verify PM2 installation
+    run_as_user pm2 --version || error_exit "PM2 not accessible to target user"
+    
     log_success "PM2 installed for user $MM_USER"
 else
-    log_warning "PM2 already installed for user $MM_USER: $(sudo -u "$MM_USER" pm2 --version)"
+    log_warning "PM2 already installed for user $MM_USER"
 fi
 
 # Create PM2 ecosystem configuration
 log_info "Creating PM2 ecosystem configuration..."
+
 cat > "$MM_DIR/ecosystem.config.js" <<EOF
 module.exports = {
   apps: [{
@@ -250,7 +287,7 @@ module.exports = {
     cwd: '$MM_DIR',
     env: {
       NODE_ENV: 'production',
-      PATH: '/usr/local/bin:/usr/bin:/bin',
+      PATH: '/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin',
       PM2_DISPLAY_NAME: 'MagicMirror'
     },
     restart_delay: 4000,
@@ -274,14 +311,14 @@ log_success "PM2 ecosystem configuration created"
 
 # Start Magic Mirror with PM2
 log_info "Starting Magic Mirror with PM2..."
-sudo -u "$MM_USER" bash -lc "cd '$MM_DIR' && export PATH='$HOME/.npm-global/bin:$PATH' && pm2 start '$MM_DIR/ecosystem.config.js'" || error_exit "Failed to start Magic Mirror with PM2"
-sudo -u "$MM_USER" bash -lc "export PATH='$HOME/.npm-global/bin:$PATH' && pm2 save" || log_warning "Failed to save PM2 process list"
+sudo -u "$MM_USER" bash -lc "cd '$MM_DIR' && export PATH='$MM_HOME/.npm-global/bin:\$PATH' && pm2 start '$MM_DIR/ecosystem.config.js'" || error_exit "Failed to start Magic Mirror with PM2"
+sudo -u "$MM_USER" bash -lc "export PATH='$MM_HOME/.npm-global/bin:\$PATH' && pm2 save" || log_warning "Failed to save PM2 process list"
 log_success "Magic Mirror started with PM2"
 
 # Configure PM2 startup
 log_info "Configuring PM2 startup..."
 # Use explicit pm2 startup command to avoid unsafe eval
-PM2_STARTUP_OUTPUT=$(pm2 startup systemd -u "$MM_USER" --hp "$MM_HOME" 2>&1 || true)
+PM2_STARTUP_OUTPUT=$(sudo -u "$MM_USER" bash -lc "export PATH='$MM_HOME/.npm-global/bin:\$PATH' && pm2 startup systemd -u '$MM_USER' --hp '$MM_HOME'" 2>&1 || true)
 if echo "$PM2_STARTUP_OUTPUT" | grep -q "successfully"; then
     log_success "PM2 startup configuration completed"
 else
@@ -301,11 +338,11 @@ fi
 log_info "Verifying installation..."
 
 # Check if PM2 process is running
-if sudo -u "$MM_USER" pm2 list | grep -q "magicmirror.*online"; then
+if sudo -u "$MM_USER" bash -lc "export PATH='$MM_HOME/.npm-global/bin:\$PATH' && pm2 list" | grep -q "magicmirror.*online"; then
     log_success "Magic Mirror process is running"
 else
     log_error "Magic Mirror process is not running"
-    sudo -u "$MM_USER" pm2 logs magicmirror --lines 10
+    sudo -u "$MM_USER" bash -lc "export PATH='$MM_HOME/.npm-global/bin:\$PATH' && pm2 logs magicmirror --lines 10"
     exit 1
 fi
 
@@ -319,13 +356,13 @@ echo ""
 
 # Display useful commands
 log_info "Useful commands:"
-echo "  Check status:    sudo -u $MM_USER pm2 status"
-echo "  View logs:       sudo -u $MM_USER pm2 logs magicmirror"
-echo "  Restart:         sudo -u $MM_USER pm2 restart magicmirror"
-echo "  Stop:            sudo -u $MM_USER pm2 stop magicmirror"
+echo "  Check status:    pm2 status"
+echo "  View logs:       pm2 logs magicmirror"
+echo "  Restart:         pm2 restart magicmirror"
+echo "  Stop:            pm2 stop magicmirror"
 echo "  View logs file:  tail -f $MM_DIR/logs/pm2-combined.log"
 echo ""
 
 log_success "Magic Mirror 2 installation completed successfully!"
 log_info "The Magic Mirror service should start automatically on system boot."
-log_info "You can check the status with: sudo -u $MM_USER pm2 status"
+log_info "You can check the status with: pm2 status"
