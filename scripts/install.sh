@@ -189,9 +189,6 @@ if [ -d "$MM_DIR" ]; then
         exit 1
     fi
 else
-    # Ensure PATH includes npm global bin
-    echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> "$MM_HOME/.bashrc"
-fi
 
 if [ ! -d "$MM_DIR" ]; then
     log_info "Shallow cloning Magic Mirror repository..."
@@ -250,20 +247,28 @@ else
     log_warning "modules.json not found, skipping module installation"
 fi
 
+# Helper function to run commands as MM_USER with proper PATH for pm2
+run_as_user() {
+    sudo -u "$MM_USER" bash -c "export PATH='$MM_HOME/.npm-global/bin:\$PATH' && $*"
+}
+
 # Install pm2 globally for target user
 log_info "Installing PM2 process manager..."
-if ! sudo -u "$MM_USER" command -v pm2 >/dev/null 2>&1; then
-    # Configure npm to use user-local directory for global packages
-    sudo -u "$MM_USER" npm config set prefix "$MM_HOME/.npm-global" || error_exit "Failed to configure npm prefix"
-    
+
+# Configure npm to use user-local directory for global packages FIRST
+sudo -u "$MM_USER" npm config set prefix "$MM_HOME/.npm-global" || error_exit "Failed to configure npm prefix"
+
+# Ensure PATH includes npm global bin in .bashrc (idempotent)
+if ! grep -q ".npm-global/bin" "$MM_HOME/.bashrc"; then
+    echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> "$MM_HOME/.bashrc"
+fi
+
+if ! run_as_user command -v pm2 >/dev/null 2>&1; then
     # Install PM2 using the configured prefix
-    sudo -u "$MM_USER" npm install -g pm2 || error_exit "Failed to install PM2"
+    run_as_user npm install -g pm2 || error_exit "Failed to install PM2"
     
-    # Test PM2
-    sudo -u "$MM_USER" bash -lc "pm2 --version" || error_exit "PM2 not accessible to target user"
-    
-    # Update PATH in current shell for subsequent commands
-    export PATH="$MM_HOME/.npm-global/bin:$PATH"
+    # Verify PM2 installation
+    run_as_user pm2 --version || error_exit "PM2 not accessible to target user"
     
     log_success "PM2 installed for user $MM_USER"
 else
